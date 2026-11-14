@@ -14,7 +14,7 @@ flowchart TB
   subgraph MAC["Mac (OrbStack)"]
     P["📁 Project folder"]
     subgraph SB["OpenShell sandbox"]
-      PI["Pi + extensions<br/>web, goddonimemory"]
+      PI["Pi + extensions<br/>web, goddonimemory, tokspeed"]
     end
     subgraph WEB["pidev-web"]
       SX["SearXNG"]
@@ -90,6 +90,7 @@ sequenceDiagram
 | `openshellPolicies/` | Sandbox policy, provider profiles, gateway config ([README](openshellPolicies/README.md)) |
 | `extensions/web/` | Pi tools `web_search`, `web_fetch` |
 | `extensions/goddonimemory/` | Pi tools `memory_*` |
+| `extensions/tokspeed/` | Footer status: tokens/s, TTFT, session average |
 | `web/` | SearXNG + fetch service (Docker Compose) |
 | `memory/` | Memory API + embeddings (Docker Compose, [README](memory/README.md)) |
 | `clipboard/` | Mac clipboard bridge + `xclip` shim for image paste |

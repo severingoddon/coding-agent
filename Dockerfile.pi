@@ -9,9 +9,10 @@ RUN apt-get update \
 
 RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"
 
-# Custom extensions: web (web_search + web_fetch) and goddonimemory, loaded via pi -e
+# Custom extensions: web (web_search + web_fetch), goddonimemory and tokspeed, loaded via pi -e
 COPY extensions/web /usr/local/share/pi/extensions/web
 COPY extensions/goddonimemory /usr/local/share/pi/extensions/goddonimemory
+COPY extensions/tokspeed /usr/local/share/pi/extensions/tokspeed
 
 # Git: credential helper for push (token via OpenShell provider)
 COPY gitconfig /etc/gitconfig

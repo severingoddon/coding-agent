@@ -134,7 +134,7 @@ pidev() {
     --env PI_CODING_AGENT_DIR=/sandbox/pi-agent \
     --env "PIDEV_PROJECT=${dir:t}" \
     --driver-config-json "$mounts" \
-    -- sh -c 'cd /sandbox/project && exec pi -e /usr/local/share/pi/extensions/web -e /usr/local/share/pi/extensions/goddonimemory'
+    -- sh -c 'cd /sandbox/project && exec pi -e /usr/local/share/pi/extensions/web -e /usr/local/share/pi/extensions/goddonimemory -e /usr/local/share/pi/extensions/tokspeed'
   local rc=$?
   # --no-keep only applies to a clean exit; also clean up when the client was killed
   openshell sandbox delete "$name" >/dev/null 2>&1
