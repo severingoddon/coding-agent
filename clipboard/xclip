@@ -1,0 +1,12 @@
+#!/bin/sh
+# xclip shim inside the sandbox: hands Pi the clipboard image mirrored from the Mac
+# (pidev/clipboard/clip-bridge.js writes it to /sandbox/clipboard/clip.png).
+f=/sandbox/clipboard/clip.png
+case " $* " in
+  *" TARGETS "*)
+    if [ -s "$f" ]; then echo image/png; else echo text/plain; fi
+    exit 0 ;;
+  *" image/png "*)
+    [ -s "$f" ] && exec cat "$f" ;;
+esac
+exit 1

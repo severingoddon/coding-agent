@@ -1,0 +1,38 @@
+# Central memory for Pi: API (SQLite, FTS5 + vector search) and embeddings (bge-m3).
+# Started automatically by pidev. Data: ~/.pidev-memory (memory.db + backups/).
+# Sandboxes can only reach the API (172.31.250.12), not the embedding service.
+name: pidev-memory
+
+services:
+  api:
+    build: ./api
+    image: pidev-memory-api:local
+    restart: unless-stopped
+    environment:
+      EMBED_URL: http://172.31.250.13:8080/v1/embeddings
+    volumes:
+      - ${HOME}/.pidev-memory:/data
+    networks:
+      web:
+        ipv4_address: 172.31.250.12
+
+  embed:
+    image: ghcr.io/ggml-org/llama.cpp:server-b11854
+    restart: unless-stopped
+    environment:
+      LLAMA_CACHE: /models
+    command: ["-hf", "gpustack/bge-m3-GGUF:Q8_0", "--embedding", "--pooling", "cls",
+              "--host", "0.0.0.0", "--port", "8080", "-c", "8192", "-ub", "8192"]
+    volumes:
+      - embed-models:/models
+    networks:
+      web:
+        ipv4_address: 172.31.250.13
+
+volumes:
+  embed-models:
+
+networks:
+  web:
+    external: true
+    name: pidev-web

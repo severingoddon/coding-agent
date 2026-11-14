@@ -1,0 +1,20 @@
+# Rendered with values from .env and imported by bin/pidev (re-imported when it changes).
+id: pi-spark
+display_name: Pi with Spark vLLM
+description: Local LLM endpoint (vLLM) for the Pi coding agent
+category: agent
+inference_capable: true
+credentials: []
+endpoints:
+  - host: ${PIDEV_LLM_HOST}
+    port: ${PIDEV_LLM_PORT}
+    protocol: rest
+    access: read-write
+    enforcement: enforce
+    allowed_ips:
+      - ${PIDEV_LLM_HOST}/32
+binaries:
+  # pi is a Node script; OpenShell checks the real executable (/proc/<pid>/exe)
+  - /usr/local/bin/node
+  - /usr/local/bin/pi
+  - /usr/local/lib/node_modules/@earendil-works/pi-coding-agent/**

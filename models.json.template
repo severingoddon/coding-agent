@@ -1,0 +1,20 @@
+{
+  "$schema": "https://pi.dev/schemas/models.schema.json",
+  "providers": {
+    "spark": {
+      "baseUrl": "http://${PIDEV_LLM_HOST}:${PIDEV_LLM_PORT}/v1",
+      "api": "openai-completions",
+      "apiKey": "unused",
+      "compat": { "thinkingFormat": "qwen-chat-template" },
+      "models": [
+        {
+          "id": "${PIDEV_LLM_MODEL}",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 262144,
+          "maxTokens": 32768
+        }
+      ]
+    }
+  }
+}

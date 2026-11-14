@@ -1,0 +1,145 @@
+#!/bin/zsh
+# Pi in an OpenShell sandbox, current project folder via bind mount.
+#   pidev [folder]   Pi for an existing project (default: $PWD)
+#   pinew <name>     create a new project under PIDEV_CODING_ROOT and start Pi (bin/pinew)
+# Starts on demand: OrbStack, OpenShell gateway, web and memory containers, clipboard bridge.
+# pidev/bin is on PATH (~/.zshrc). Requires enable_bind_mounts in ~/.config/openshell/gateway.toml
+
+PI_DIR="${0:A:h:h}"
+
+# Local configuration (.env, not in git). First run: create it from .env.example with a random SearXNG secret.
+if [[ ! -f "$PI_DIR/.env" ]]; then
+  sed "s/^SEARXNG_SECRET=.*/SEARXNG_SECRET=$(openssl rand -hex 32)/" "$PI_DIR/.env.example" > "$PI_DIR/.env"
+  echo "Created $PI_DIR/.env – set your LLM endpoint and project root there, then run pidev again." >&2
+  exit 1
+fi
+set -a; source "$PI_DIR/.env"; set +a
+PI_CODING_ROOT="${PIDEV_CODING_ROOT:A}"
+PI_POLICY="$PI_DIR/openshellPolicies/policy.yaml"
+PI_AGENT_HOME="$HOME/.pi-sandbox-agent"   # sessions/settings persist across sandboxes
+PI_SPARK="http://$PIDEV_LLM_HOST:$PIDEV_LLM_PORT/v1/models"
+PI_GEN="$PI_DIR/.generated"               # templates rendered with .env values (not in git)
+PI_CLIP="$HOME/.pidev-clipboard"           # clipboard image Mac → sandbox (Ctrl+V in Pi)
+
+# Clipboard bridge: runs while at least one pidev session is running
+_pidev_clip_start() {
+  mkdir -p "$PI_CLIP"
+  pgrep -f "clipboard/clip-bridge.js" >/dev/null && return
+  nohup osascript -l JavaScript "$PI_DIR/clipboard/clip-bridge.js" "$PI_CLIP" >/dev/null 2>&1 &!
+}
+_pidev_clip_stop() {   # $1 = own sandbox name (its client may still be exiting)
+  pgrep -fl "^openshell sandbox create --name pi-" | grep -qv -- "--name $1 " && return   # another pidev session is active
+  pkill -f "clipboard/clip-bridge.js"; rm -f "$PI_CLIP/clip.png"
+}
+
+# Replaces ${PIDEV_*} placeholders in template $1 and writes the result to $2
+_pidev_render() {
+  local s=$(<"$1") v
+  for v in ${(k)parameters[(I)PIDEV_*]}; do s=${s//\$\{$v\}/${(P)v}}; done
+  print -r -- "$s" > "$2"
+}
+
+# LLM provider profile from the template; imported on first run, updated when .env changes
+_pidev_provider() {
+  mkdir -p "$PI_GEN"
+  _pidev_render "$PI_DIR/openshellPolicies/pi-spark.yaml.template" "$PI_GEN/pi-spark.next.yaml"
+  if ! openshell provider profile list 2>/dev/null | grep -q '^pi-spark '; then
+    openshell provider profile import -f "$PI_GEN/pi-spark.next.yaml" >/dev/null || return 1
+  elif ! cmp -s "$PI_GEN/pi-spark.next.yaml" "$PI_GEN/pi-spark.yaml"; then
+    echo "▸ Updating LLM provider profile"
+    # update requires the current resource_version from the gateway
+    local rv=$(openshell provider profile export pi-spark 2>/dev/null | awk '/^resource_version:/ {print $2}')
+    awk -v rv="$rv" '{print} /^id: pi-spark$/ {print "resource_version: " rv}' "$PI_GEN/pi-spark.next.yaml" > "$PI_GEN/pi-spark.update.yaml"
+    openshell provider profile update -f "$PI_GEN/pi-spark.update.yaml" pi-spark >/dev/null || return 1
+  fi
+  mv "$PI_GEN/pi-spark.next.yaml" "$PI_GEN/pi-spark.yaml"
+  openshell provider list 2>/dev/null | grep -q '^pi-spark ' \
+    || openshell provider create --name pi-spark --type pi-spark >/dev/null || return 1
+}
+
+# Waits up to $2 seconds until command $1 succeeds
+_pidev_wait() { local i; for i in $(seq 1 $2); do eval "$1" >/dev/null 2>&1 && return 0; sleep 1; done; return 1; }
+
+_pidev_up() {
+  if ! docker info >/dev/null 2>&1; then
+    echo "▸ Starting OrbStack"
+    orb start >/dev/null 2>&1
+    _pidev_wait "docker info" 60 || { echo "✗ Docker did not start" >&2; return 1; }
+  fi
+  if ! openshell status 2>/dev/null | grep -q "Status: Connected"; then
+    echo "▸ Starting OpenShell gateway"
+    brew services start nvidia/openshell/openshell >/dev/null 2>&1
+    _pidev_wait "openshell status | grep -q 'Status: Connected'" 60 || { echo "✗ Gateway did not start" >&2; return 1; }
+  fi
+  if [[ $(docker ps -q --filter label=com.docker.compose.project=pidev-web | wc -l) -lt 2 ]]; then
+    echo "▸ Starting web containers (SearXNG + fetch)"
+    docker compose -f "$PI_DIR/web/docker-compose.yml" up -d --quiet-pull >/dev/null 2>&1 \
+      || { echo "✗ Web containers failed: docker compose -f $PI_DIR/web/docker-compose.yml up" >&2; return 1; }
+  fi
+  if [[ $(docker ps -q --filter label=com.docker.compose.project=pidev-memory | wc -l) -lt 2 ]]; then
+    echo "▸ Starting memory"
+    docker compose -f "$PI_DIR/memory/docker-compose.yml" up -d --quiet-pull >/dev/null 2>&1 \
+      || echo "⚠ Memory did not start (Pi runs without it): docker compose -f $PI_DIR/memory/docker-compose.yml up" >&2
+  fi
+  _pidev_provider || { echo "✗ Could not register the LLM provider profile (openshellPolicies/pi-spark.yaml.template)" >&2; return 1; }
+  curl -sf -m 3 "$PI_SPARK" >/dev/null \
+    || { echo "✗ LLM not reachable ($PI_SPARK). Is the model server running? VPN off?" >&2; return 1; }
+}
+
+pidev() {
+  local dir="${${1:-$PWD}:A}"
+  # Only projects under Coding/ (never ~ or /), excluding pidev/ (protects the policy)
+  if [[ "$dir" != "$PI_CODING_ROOT"/?* || "$dir" == "$PI_DIR"* ]]; then
+    echo "pidev: only for projects under $PI_CODING_ROOT (except pidev/)" >&2; return 1
+  fi
+  [[ -d "$dir" ]] || { echo "pidev: $dir does not exist" >&2; return 1; }
+  _pidev_up || return 1
+  mkdir -p "$PI_AGENT_HOME"
+  _pidev_render "$PI_DIR/models.json.template" "$PI_AGENT_HOME/models.json"
+
+  local name="pi-${${${dir:t}:l}//[^a-z0-9]/-}"
+  local mounts
+  mounts=$(printf '{"docker":{"mounts":[%s,%s,%s]}}' \
+    "{\"type\":\"bind\",\"source\":\"$dir\",\"target\":\"/sandbox/project\",\"read_only\":false}" \
+    "{\"type\":\"bind\",\"source\":\"$PI_AGENT_HOME\",\"target\":\"/sandbox/pi-agent\",\"read_only\":false}" \
+    "{\"type\":\"bind\",\"source\":\"$PI_CLIP\",\"target\":\"/sandbox/clipboard\",\"read_only\":true}")
+
+  # Git identity from the Mac (project config wins) for commits inside the sandbox
+  local gname gmail; local -a genv
+  gname=$(git -C "$dir" config user.name 2>/dev/null); gmail=$(git -C "$dir" config user.email 2>/dev/null)
+  [[ -n "$gname" ]] && genv+=(--env "GIT_AUTHOR_NAME=$gname" --env "GIT_COMMITTER_NAME=$gname")
+  [[ -n "$gmail" ]] && genv+=(--env "GIT_AUTHOR_EMAIL=$gmail" --env "GIT_COMMITTER_EMAIL=$gmail")
+
+  # Attach git push providers if they exist (pi-github / pi-gitlab)
+  local -a prov=(--provider pi-spark); local p
+  for p in $(openshell provider list 2>/dev/null | awk '$1 ~ /^pi-git(hub|lab)$/ {print $1}'); do prov+=(--provider "$p"); done
+
+  # Sandbox already exists: abort if it is still running in another tab, otherwise it is orphaned (tab closed) → delete it
+  if openshell sandbox list 2>/dev/null | awk -v n="$name" '$1 == n {f=1} END {exit !f}'; then
+    if pgrep -f "^openshell sandbox create --name $name " >/dev/null; then
+      echo "pidev: $name is already running in another terminal" >&2; return 1
+    fi
+    echo "↻ Deleting orphaned sandbox $name" >&2
+    openshell sandbox delete "$name" >/dev/null 2>&1
+  fi
+
+  # Tab/window closed (SIGHUP) → still clean up the sandbox
+  trap "openshell sandbox delete '$name' >/dev/null 2>&1; _pidev_clip_stop '$name'; exit 129" HUP TERM
+
+  _pidev_clip_start
+  openshell sandbox create \
+    --name "$name" --no-keep "${genv[@]}" "${prov[@]}" \
+    --from pi-agent:local \
+    --policy "$PI_POLICY" \
+    --env PI_CODING_AGENT_DIR=/sandbox/pi-agent \
+    --env "PIDEV_PROJECT=${dir:t}" \
+    --driver-config-json "$mounts" \
+    -- sh -c 'cd /sandbox/project && exec pi -e /usr/local/share/pi/extensions/web -e /usr/local/share/pi/extensions/goddonimemory'
+  local rc=$?
+  # --no-keep only applies to a clean exit; also clean up when the client was killed
+  openshell sandbox delete "$name" >/dev/null 2>&1
+  _pidev_clip_stop "$name"
+  return $rc
+}
+
+pidev "$@"

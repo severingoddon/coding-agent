@@ -1,0 +1,29 @@
+FROM node:24-bookworm-slim
+
+ARG PI_VERSION=1.4.0
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash ca-certificates git ripgrep fd-find python3 python3-pip python3-venv \
+    && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"
+
+# Custom extensions: web (web_search + web_fetch) and goddonimemory, loaded via pi -e
+COPY extensions/web /usr/local/share/pi/extensions/web
+COPY extensions/goddonimemory /usr/local/share/pi/extensions/goddonimemory
+
+# Git: credential helper for push (token via OpenShell provider)
+COPY gitconfig /etc/gitconfig
+
+# Image paste (Ctrl+V): xclip shim reads the clipboard image mirrored from the Mac
+COPY clipboard/xclip /usr/local/bin/xclip
+
+RUN mkdir -p /workspace && chown node:node /workspace
+USER node
+WORKDIR /workspace
+
+ENV PI_CODING_AGENT_DIR=/tmp/pi-agent \
+    npm_config_cache=/tmp/.npm \
+    PIP_CACHE_DIR=/tmp/.pip-cache \
+    GIT_CONFIG_GLOBAL=/sandbox/pi-agent/gitconfig

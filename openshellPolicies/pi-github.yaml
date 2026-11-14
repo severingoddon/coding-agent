@@ -1,0 +1,27 @@
+# Git push to GitHub for Pi (any repo). The token stays outside the sandbox:
+# Pi only sees a placeholder in $GITHUB_TOKEN, OpenShell replaces it on requests to github.com.
+# Import:   openshell provider profile import -f pi-github.yaml
+# Provider: see README.md
+id: pi-github
+display_name: Pi GitHub push
+description: Git clone/fetch/push to github.com for the Pi sandbox
+category: source_control
+credentials:
+  - name: token
+    description: GitHub token (repo read/write)
+    env_vars: [GITHUB_TOKEN]
+    required: true
+    auth_style: basic
+endpoints:
+  - host: github.com
+    port: 443
+    protocol: rest
+    enforcement: enforce
+    rules:
+      - allow: { method: GET, path: "**" }
+      - allow: { method: HEAD, path: "**" }
+      - allow: { method: POST, path: "/**/git-upload-pack" }
+      - allow: { method: POST, path: "/**/git-receive-pack" }
+binaries:
+  - /usr/bin/git
+  - /usr/lib/git-core/*

@@ -1,0 +1,9 @@
+/.idea/
+.DS_Store
+
+# local configuration and generated files
+.env
+/.generated/
+
+node_modules/
+__pycache__/

@@ -1,0 +1,27 @@
+# Git push to GitLab for Pi (any repo). The token stays outside the sandbox:
+# Pi only sees a placeholder in $GITLAB_TOKEN, OpenShell replaces it on requests to gitlab.com.
+# Import:   openshell provider profile import -f pi-gitlab.yaml
+# Provider: see README.md
+id: pi-gitlab
+display_name: Pi GitLab push
+description: Git clone/fetch/push to gitlab.com for the Pi sandbox
+category: source_control
+credentials:
+  - name: token
+    description: GitLab token (repo read/write)
+    env_vars: [GITLAB_TOKEN]
+    required: true
+    auth_style: basic
+endpoints:
+  - host: gitlab.com
+    port: 443
+    protocol: rest
+    enforcement: enforce
+    rules:
+      - allow: { method: GET, path: "**" }
+      - allow: { method: HEAD, path: "**" }
+      - allow: { method: POST, path: "/**/git-upload-pack" }
+      - allow: { method: POST, path: "/**/git-receive-pack" }
+binaries:
+  - /usr/bin/git
+  - /usr/lib/git-core/*

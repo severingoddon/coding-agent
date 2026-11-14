@@ -1,0 +1,7 @@
+# System git config in the Pi image: token placeholder from the OpenShell provider used as password
+[credential "https://github.com"]
+	helper = "!f() { test -n \"$GITHUB_TOKEN\" && echo username=x-access-token && echo \"password=$GITHUB_TOKEN\"; }; f"
+[credential "https://gitlab.com"]
+	helper = "!f() { test -n \"$GITLAB_TOKEN\" && echo username=oauth2 && echo \"password=$GITLAB_TOKEN\"; }; f"
+[init]
+	defaultBranch = main

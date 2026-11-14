@@ -1,0 +1,12 @@
+# SearXNG for Pi: reachable only inside the pidev-web Docker network, no host port
+use_default_settings: true
+server:
+  # secret_key comes from SEARXNG_SECRET in ../../.env
+  limiter: false
+  image_proxy: false
+  public_instance: false
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json

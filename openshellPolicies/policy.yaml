@@ -1,0 +1,112 @@
+# Sandbox policy for Pi.
+# Access to the LLM endpoint is intentionally missing here:
+# OpenShell adds it automatically from the pi-spark provider (pi-spark.yaml.template).
+#
+# Loaded by bin/pidev on every start (--policy).
+version: 1
+
+# OpenShell default filesystem rules (unchanged)
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /bin
+    - /usr
+    - /lib
+    - /proc
+    - /dev/urandom
+    - /etc
+    - /var/log
+    - /sandbox/clipboard  # clipboard image from the Mac (bind mount, read-only)
+  read_write:
+    - /tmp
+    - /dev/null
+    - /sandbox/project    # project folder (bind mount via pidev)
+    - /sandbox/pi-agent   # Pi sessions/settings (~/.pi-sandbox-agent)
+landlock:
+  compatibility: best_effort
+
+network_policies:
+  # NVIDIA Developer Forum: read only (GET/HEAD), Node only (Pi and its scripts)
+  nvidia_forum:
+    name: nvidia_forum
+    endpoints:
+      - host: forums.developer.nvidia.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-only
+    binaries:
+      - path: /usr/local/bin/node
+
+  # Web search + page fetch: containers on the Mac (pidev/web), fixed IPs in the pidev-web network
+  pidev_web:
+    name: pidev_web
+    endpoints:
+      - host: 172.31.250.10
+        port: 8080
+        protocol: rest
+        enforcement: enforce
+        access: read-only
+        allowed_ips:
+          - 172.31.250.10/32
+      - host: 172.31.250.11
+        port: 8080
+        protocol: rest
+        enforcement: enforce
+        access: read-only
+        allowed_ips:
+          - 172.31.250.11/32
+    binaries:
+      - path: /usr/local/bin/node
+
+  # pip install (PyPI), Python only
+  pypi:
+    name: pypi
+    endpoints:
+      - { host: pypi.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: files.pythonhosted.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+    binaries:
+      - path: /usr/bin/python3*
+
+  # npm install, Node only
+  npm:
+    name: npm
+    endpoints:
+      - { host: registry.npmjs.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+    binaries:
+      - path: /usr/local/bin/node
+
+  # GitHub read: git clone/fetch, tarballs
+  github_read:
+    name: github_read
+    endpoints:
+      - host: github.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: GET, path: "/**/info/refs*" }
+          - allow: { method: POST, path: "/**/git-upload-pack" }
+          - allow: { method: GET, path: "/**" }
+      - { host: codeload.github.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: objects.githubusercontent.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: raw.githubusercontent.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+    binaries:
+      - path: /usr/bin/git
+      - path: /usr/lib/git-core/*
+      - path: /usr/local/bin/node
+      - path: /usr/bin/python3*
+
+  # Central memory (pidev/memory): API only, not the embedding service
+  pidev_memory:
+    name: pidev_memory
+    endpoints:
+      - host: 172.31.250.12
+        port: 8080
+        protocol: rest
+        enforcement: enforce
+        access: read-write
+        allowed_ips:
+          - 172.31.250.12/32
+    binaries:
+      - path: /usr/local/bin/node
