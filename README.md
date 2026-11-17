@@ -27,7 +27,7 @@ Cloud coding agents are convenient, but they send your code to a third party, an
 
 ## Highlights
 
-| | |
+| Feature | Details |
 |---|---|
 | 🧠 **Local inference** | vLLM on an NVIDIA DGX Spark (Qwen3.8 Flash-Next, vision capable), OpenAI-compatible API. No per-token cost, and the code never leaves my network. |
 | 🔒 **Default-deny sandbox** | Landlock filesystem rules plus an allowlist network policy per binary and HTTP method. `python3` may read from PyPI, `node` from npm, `git` from GitHub. Everything else is blocked. |
