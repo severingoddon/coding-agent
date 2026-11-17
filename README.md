@@ -29,14 +29,14 @@ Cloud coding agents are convenient, but they send your code to a third party, an
 
 | Feature | Details |
 |---|---|
-| 🧠 **Local inference** | vLLM on an NVIDIA DGX Spark (Qwen3.8 Flash-Next, vision capable), OpenAI-compatible API. No per-token cost, and the code never leaves my network. |
-| 🔒 **Default-deny sandbox** | Landlock filesystem rules plus an allowlist network policy per binary and HTTP method. `python3` may read from PyPI, `node` from npm, `git` from GitHub. Everything else is blocked. |
-| 🔑 **Secrets stay outside** | Git tokens are placeholders inside the sandbox. The OpenShell proxy injects the real credential on the way out. |
-| 🔎 **Private web search** | Own SearXNG instance plus a fetch service (Readability → Markdown) with an SSRF guard, so the sandbox can't use it to reach the LAN. |
-| 🗂️ **Long-term memory** | Shared across projects. Hybrid search (SQLite FTS5 + sqlite-vec, bge-m3 embeddings), duplicate detection, versioned soft deletes. The agent decides when to read and write. |
-| ⚡ **Performance HUD** | Live tokens/s, time to first token, session average and total response time in the footer. |
-| 📋 **Screenshot paste** | `Ctrl+V` pastes images from the Mac clipboard into the sandboxed agent. |
-| 🧹 **Ephemeral** | A new sandbox on every start, deleted on exit. Policies are applied on every start, never installed. |
+| **Local inference** | vLLM on an NVIDIA DGX Spark (Qwen3.8 Flash-Next, vision capable), OpenAI-compatible API. No per-token cost, and the code never leaves my network. |
+| **Default-deny sandbox** | Landlock filesystem rules plus an allowlist network policy per binary and HTTP method. `python3` may read from PyPI, `node` from npm, `git` from GitHub. Everything else is blocked. |
+| **Secrets stay outside** | Git tokens are placeholders inside the sandbox. The OpenShell proxy injects the real credential on the way out. |
+| **Private web search** | Own SearXNG instance plus a fetch service (Readability → Markdown) with an SSRF guard, so the sandbox can't use it to reach the LAN. |
+| **Long-term memory** | Shared across projects. Hybrid search (SQLite FTS5 + sqlite-vec, bge-m3 embeddings), duplicate detection, versioned soft deletes. The agent decides when to read and write. |
+| **Performance HUD** | Live tokens/s, time to first token, session average and total response time in the footer. |
+| **Screenshot paste** | `Ctrl+V` pastes images from the Mac clipboard into the sandboxed agent. |
+| **Ephemeral** | A new sandbox on every start, deleted on exit. Policies are applied on every start, never installed. |
 
 ## Architecture
 
