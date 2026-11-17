@@ -69,7 +69,7 @@ sequenceDiagram
   G->>G: policy = policy.yaml + endpoints of the attached providers
   G->>S: create container with mounts, credential placeholders
   S->>S: apply Landlock filesystem rules, route all traffic through the policy proxy
-  S->>U: pi -e web -e goddonimemory (interactive)
+  S->>U: pi -e web -e goddonimemory -e tokspeed (interactive)
   Note over S: every connection is checked:<br/>host:port + calling binary, else blocked<br/>git requests get the real token injected
   U->>S: exit / close tab
   B->>G: sandbox delete, stop clipboard bridge
@@ -78,6 +78,7 @@ sequenceDiagram
 - **Policies are not installed**, they are sent with every `sandbox create`: `policy.yaml` via `--policy`, provider profiles via `--provider`. Editing `policy.yaml` takes effect on the next `pidev`.
 - **Provider profiles** live in the gateway (imported once, `pi-spark` by `pidev` itself). A provider adds its endpoints to the sandbox policy and holds its credentials outside the sandbox.
 - **Gateway config** (`gateway.toml`) is read when the gateway starts and only allows the bind mounts.
+- **Extensions are baked into the image** (`COPY` in `Dockerfile.pi`). Editing a file in `extensions/` has no effect until you rebuild `pi-agent:local`, see [Pi extensions](#pi-extensions). Restarting the sandbox alone is not enough.
 
 ## Layout
 
@@ -90,7 +91,7 @@ sequenceDiagram
 | `openshellPolicies/` | Sandbox policy, provider profiles, gateway config ([README](openshellPolicies/README.md)) |
 | `extensions/web/` | Pi tools `web_search`, `web_fetch` |
 | `extensions/goddonimemory/` | Pi tools `memory_*` |
-| `extensions/tokspeed/` | Footer status: tokens/s, TTFT, session average |
+| `extensions/tokspeed/` | Footer status: tokens/s, TTFT, session average, total response time |
 | `web/` | SearXNG + fetch service (Docker Compose) |
 | `memory/` | Memory API + embeddings (Docker Compose, [README](memory/README.md)) |
 | `clipboard/` | Mac clipboard bridge + `xclip` shim for image paste |
@@ -102,7 +103,7 @@ Requirements: [OrbStack](https://orbstack.dev), an OpenAI-compatible LLM endpoin
 
 1. Install OpenShell:
    `curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | OPENSHELL_VERSION=v0.1.7 sh`
-2. Gateway config: copy `openshellPolicies/gateway.toml` to `~/.config/openshell/`, and in `~/.config/openshell/gateway.env` set `OPENSHELL_GATEWAY_CONFIG=$HOME/.config/openshell/gateway.toml`
+2. Gateway config: copy `openshellPolicies/gateway.toml` to `~/.config/openshell/`, and in `~/.config/openshell/gateway.env` set `OPENSHELL_GATEWAY_CONFIG=$HOME/.config/openshell/gateway.toml`, plus `OPENSHELL_COMPUTE_DRIVER=docker` and `DOCKER_HOST=unix://$HOME/.orbstack/run/docker.sock`. Without these the gateway fails after a reboot, because `/var/run/docker.sock` may be missing and driver auto-detection finds no Docker.
 3. Configure: `cp .env.example .env`, set project root and LLM endpoint, `SEARXNG_SECRET=$(openssl rand -hex 32)` (or just run `pidev` once, it creates `.env` with a secret)
 4. Build and register (the LLM provider is registered by `pidev` itself):
    ```bash
@@ -114,3 +115,29 @@ Requirements: [OrbStack](https://orbstack.dev), an OpenAI-compatible LLM endpoin
    read -s "GITHUB_TOKEN?Token: " && GITHUB_TOKEN=$GITHUB_TOKEN openshell provider create --name pi-github --type pi-github --credential GITHUB_TOKEN; unset GITHUB_TOKEN
    ```
 6. `export PATH="/path/to/pidev/bin:$PATH"` in `~/.zshrc`, then `brew services restart nvidia/openshell/openshell`
+
+## Pi extensions
+
+Extensions live in `extensions/<name>/index.ts` and are copied into the image at build time, then loaded with `pi -e`.
+
+**Change an existing extension:**
+
+```bash
+docker build -t pi-agent:local -f Dockerfile.pi .
+```
+
+Then quit any running Pi session and start `pidev` again (it creates a fresh sandbox from the new image).
+
+**Add a new extension:**
+
+1. Create `extensions/<name>/index.ts` (default export `function (pi: ExtensionAPI)`)
+2. `Dockerfile.pi`: add `COPY extensions/<name> /usr/local/share/pi/extensions/<name>`
+3. `bin/pidev`: append `-e /usr/local/share/pi/extensions/<name>` to the `pi` command
+4. Rebuild the image (see above) and restart `pidev`
+5. README: add the extension to the Layout table and the diagrams
+
+Check that the image contains the current version:
+
+```bash
+docker run --rm --entrypoint cat pi-agent:local /usr/local/share/pi/extensions/<name>/index.ts
+```
