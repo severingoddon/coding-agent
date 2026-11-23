@@ -168,6 +168,14 @@ Requirements: macOS with [OrbStack](https://orbstack.dev), an OpenAI-compatible 
    ```
 6. `export PATH="/path/to/pidev/bin:$PATH"` in `~/.zshrc`, then `brew services restart nvidia/openshell/openshell`
 
+## Switching models
+
+`pidev` asks the LLM server which model it runs (`/v1/models`) and picks the profile in `llm/` whose `id` matches. To switch, start another model on the server (e.g. `sparkrun run …`) and start `pidev` again. Nothing changes in pidev.
+
+- `PIDEV_LLM_MODEL` in `.env` is empty by default. Set it only to force one model ID.
+- A model without a profile still works, with a warning: text only, no thinking control, context from the server's `max_model_len`.
+- New model: copy a file in `llm/` and adjust `id`, `contextWindow`, `input` and `compat`. Qwen uses `thinkingFormat: "qwen-chat-template"`. Inkling passes Pi's thinking level as the `reasoning_effort` chat template kwarg (`off` → `none`).
+
 ## Pi extensions
 
 | Extension | What it adds |
@@ -206,8 +214,9 @@ docker run --rm --entrypoint cat pi-agent:local /usr/local/share/pi/extensions/<
 |---|---|
 | `bin/` | `pidev`, `pinew` start scripts (put on `PATH`) |
 | `Dockerfile.pi` | Sandbox image: Node 24, Pi, Python 3, git, extensions |
-| `.env.example` | Local configuration template (project root, LLM endpoint, SearXNG secret) → `.env` |
-| `models.json.template` | LLM provider for Pi, rendered with `.env` values on every start |
+| `.env.example` | Local configuration template (project root, LLM endpoint, optional model ID, SearXNG secret) → `.env` |
+| `models.json.template` | LLM provider for Pi, rendered on every start with `.env` values and the model profile |
+| `llm/` | Model profiles (`<name>.json`): context window, input types, thinking format per model |
 | `openshellPolicies/` | Sandbox policy, provider profiles, gateway config ([README](openshellPolicies/README.md)) |
 | `extensions/` | Pi extensions `web`, `goddonimemory`, `tokspeed` |
 | `web/` | SearXNG + fetch service (Docker Compose) |

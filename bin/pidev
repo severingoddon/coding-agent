@@ -57,6 +57,25 @@ _pidev_provider() {
     || openshell provider create --name pi-spark --type pi-spark >/dev/null || return 1
 }
 
+# Model for Pi: the one the LLM server reports (or PIDEV_LLM_MODEL from .env), with its
+# settings from llm/<name>.json (matched by "id"). Unknown model → generic entry without thinking control.
+_pidev_model() {
+  local served f
+  served=$(curl -sf -m 3 "$PI_SPARK") || return 1
+  PIDEV_LLM_MODEL_ID=${PIDEV_LLM_MODEL:-$(jq -r '.data[0].id // empty' <<<"$served")}
+  [[ -n "$PIDEV_LLM_MODEL_ID" ]] || { echo "✗ LLM server reports no model ($PI_SPARK)" >&2; return 1; }
+  jq -e --arg id "$PIDEV_LLM_MODEL_ID" 'any(.data[]; .id == $id)' <<<"$served" >/dev/null \
+    || echo "⚠ $PIDEV_LLM_MODEL_ID (PIDEV_LLM_MODEL) is not served by $PI_SPARK" >&2
+  for f in "$PI_DIR"/llm/*.json(N); do
+    if jq -e --arg id "$PIDEV_LLM_MODEL_ID" '.id == $id' "$f" >/dev/null 2>&1; then
+      PIDEV_LLM_MODEL_JSON=$(<"$f"); echo "▸ Model: $PIDEV_LLM_MODEL_ID (llm/${f:t})"; return 0
+    fi
+  done
+  PIDEV_LLM_MODEL_JSON=$(jq --arg id "$PIDEV_LLM_MODEL_ID" \
+    '{id: $id, reasoning: false, input: ["text"], contextWindow: ((.data[] | select(.id == $id) | .max_model_len) // 131072), maxTokens: 32768}' <<<"$served")
+  echo "⚠ Model: $PIDEV_LLM_MODEL_ID has no profile in llm/ – using a generic entry (no thinking control, text only)" >&2
+}
+
 # Waits up to $2 seconds until command $1 succeeds
 _pidev_wait() { local i; for i in $(seq 1 $2); do eval "$1" >/dev/null 2>&1 && return 0; sleep 1; done; return 1; }
 
@@ -84,6 +103,7 @@ _pidev_up() {
   _pidev_provider || { echo "✗ Could not register the LLM provider profile (openshellPolicies/pi-spark.yaml.template)" >&2; return 1; }
   curl -sf -m 3 "$PI_SPARK" >/dev/null \
     || { echo "✗ LLM not reachable ($PI_SPARK). Is the model server running? VPN off?" >&2; return 1; }
+  _pidev_model
 }
 
 pidev() {

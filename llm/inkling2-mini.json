@@ -1,0 +1,12 @@
+{
+  "id": "thinkingmachines/Inkling-2-Mini",
+  "reasoning": true,
+  "input": ["text", "image"],
+  "contextWindow": 262144,
+  "maxTokens": 32768,
+  "thinkingLevelMap": { "off": "none" },
+  "compat": {
+    "thinkingFormat": "chat-template",
+    "chatTemplateKwargs": { "reasoning_effort": { "$var": "thinking.effort" } }
+  }
+}

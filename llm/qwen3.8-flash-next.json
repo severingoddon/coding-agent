@@ -1,0 +1,8 @@
+{
+  "id": "nvidia/Qwen3.8-Flash-Next-FP4-Local",
+  "reasoning": true,
+  "input": ["text", "image"],
+  "contextWindow": 262144,
+  "maxTokens": 32768,
+  "compat": { "thinkingFormat": "qwen-chat-template" }
+}
